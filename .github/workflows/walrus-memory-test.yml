@@ -1,0 +1,48 @@
+name: Walrus memory test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  memory-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: RecallPay-project
+
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write 10 demo memories
+        env:
+          MEMWAL_ACCOUNT_ID: ${{ secrets.MEMWAL_ACCOUNT_ID }}
+          MEMWAL_PRIVATE_KEY: ${{ secrets.MEMWAL_PRIVATE_KEY }}
+        run: node scripts/walrus.mjs seed
+
+      - name: Recall demo memories
+        env:
+          MEMWAL_ACCOUNT_ID: ${{ secrets.MEMWAL_ACCOUNT_ID }}
+          MEMWAL_PRIVATE_KEY: ${{ secrets.MEMWAL_PRIVATE_KEY }}
+        run: node scripts/walrus.mjs recall
+
+      - name: Save write receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: walrus-write-receipts
+          path: RecallPay-project/receipts/
+          if-no-files-found: warn
