@@ -1,0 +1,24 @@
+{
+  "name": "recallpay",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "walrus:health": "node --env-file=.env.local scripts/walrus.mjs health",
+    "walrus:seed": "node --env-file=.env.local scripts/walrus.mjs seed",
+    "walrus:recall": "node --env-file=.env.local scripts/walrus.mjs recall"
+  },
+  "dependencies": {
+    "@mysten-incubation/memwal": "^0.1.14",
+    "@mysten/seal": "^1.5.4",
+    "@mysten/sui": "^2.39.1",
+    "@mysten/walrus": "^1.2.39"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}
