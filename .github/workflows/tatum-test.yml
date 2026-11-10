@@ -1,0 +1,66 @@
+name: Tatum Sui test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
+      - name: Test a Sui Mainnet balance read
+        env:
+          TATUM_API_KEY: ${{ secrets.TATUM_API_KEY }}
+        run: |
+          node --input-type=module <<'EOF'
+          const key = process.env.TATUM_API_KEY;
+
+          if (!key) {
+            console.error('TATUM_API_KEY is missing.');
+            process.exit(1);
+          }
+
+          const address = '0x' + '0'.repeat(64);
+
+          try {
+            const response = await fetch(
+              'https://sui-mainnet.gateway.tatum.io',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': key,
+                },
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 1,
+                  method: 'suix_getBalance',
+                  params: [address, '0x2::sui::SUI'],
+                }),
+                signal: AbortSignal.timeout(15000),
+              }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok || data.error || !data.result) {
+              console.error('Tatum did not return a balance.');
+              process.exit(1);
+            }
+
+            console.log('Success: Tatum returned a Sui Mainnet balance.');
+            console.log('Balance in MIST:', data.result.totalBalance);
+          } catch {
+            console.error('Tatum request failed. Check the key or endpoint.');
+            process.exit(1);
+          }
+          EOF
