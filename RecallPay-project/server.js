@@ -1,7 +1,34 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+// Public demo: only return a small allowlist of synthetic fixture memories.
+// This is not authentication or a general-purpose user memory API.
+const allowedDemoMemories = new Set([
+  'Demo user found a 30% spending cut too restrictive.',
+  'Demo user found a smaller weekly spending limit easier to follow.'
+]);
+let recallCache = null, recallInFlight = null;
+async function fetchDemoMemories() {
+  if (recallCache && Date.now() - recallCache.at < 60000) return recallCache.data;
+  if (recallInFlight) return recallInFlight;
+  recallInFlight = (async () => {
+    const { MemWal } = await import('@mysten-incubation/memwal');
+    const client = MemWal.create({key:process.env.MEMWAL_PRIVATE_KEY,accountId:process.env.MEMWAL_ACCOUNT_ID,serverUrl:'https://relayer.memory.walrus.xyz',namespace:'recallpay-demo'});
+    const found = await client.recall({query:'What savings strategies and preferences work for the demo user?',limit:10});
+    const results = (found.results || []).filter(x => allowedDemoMemories.has(x.text) && typeof x.blob_id === 'string' && /^[A-Za-z0-9_-]{1,150}$/.test(x.blob_id)).map(x=>({text:x.text,blobId:x.blob_id}));
+    const data = {source:'Walrus Mainnet', memories:results};
+    recallCache = {at:Date.now(),data};
+    return data;
+  })();
+  try { return await recallInFlight; } finally { recallInFlight = null; }
+}
 const server = http.createServer(async (req,res)=>{
+  if(req.url==='/api/demo-memories' && req.method==='GET') {
+    res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');
+    if(!process.env.MEMWAL_ACCOUNT_ID || !process.env.MEMWAL_PRIVATE_KEY) {res.writeHead(503);return res.end(JSON.stringify({error:'Walrus demo is not configured on the server.'}));}
+    try {const data=await fetchDemoMemories();return res.end(JSON.stringify(data));}
+    catch(e) {res.writeHead(502);return res.end(JSON.stringify({error:'Walrus recall is unavailable. Try again later.'}));}
+  }
   if(req.url==='/api/wallet' && req.method==='POST') {
     let raw=''; for await (const chunk of req) {raw+=chunk;if(raw.length>2048){res.writeHead(413);return res.end();}}
     res.setHeader('Content-Type','application/json');
