@@ -10,10 +10,12 @@
     "walrus:recall": "node --env-file=.env.local scripts/walrus.mjs recall"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.7",
     "@mysten-incubation/memwal": "^0.1.14",
     "@mysten/seal": "^1.5.4",
     "@mysten/sui": "^2.39.1",
-    "@mysten/walrus": "^1.2.39"
+    "@mysten/walrus": "^1.2.39",
+    "protobufjs": "^8.8.1"
   },
   "engines": {
     "node": ">=22"

@@ -2,6 +2,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const {getBalance} = require('./tatum');
+let tatumRequests=[];const tatumCache=new Map();
 // Public demo: only return a small allowlist of synthetic fixture memories.
 // This is not authentication or a general-purpose user memory API.
 const allowedDemoMemories = new Set([
@@ -64,9 +66,16 @@ const server = http.createServer(async (req,res)=>{
       const {address}=JSON.parse(raw);
       if(!/^0x[0-9a-fA-F]{64}$/.test(address)) {res.writeHead(400);return res.end(JSON.stringify({error:'Enter a Sui address: 0x followed by 64 hexadecimal characters.'}));}
       if(!process.env.TATUM_API_KEY){res.writeHead(503);return res.end(JSON.stringify({error:'Tatum is not configured yet. Add TATUM_API_KEY to the server environment.'}));}
-      const response=await fetch('https://sui-mainnet.gateway.tatum.io',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':process.env.TATUM_API_KEY},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'suix_getBalance',params:[address,'0x2::sui::SUI']})});
-      const data=await response.json(); if(!response.ok||data.error||!data.result) throw new Error(data.error?.message||'Tatum request failed');
-      return res.end(JSON.stringify({balance:data.result.totalBalance,address,source:'Tatum Sui Mainnet'}));
+      const normalized=address.toLowerCase(), now=Date.now();
+      const cached=tatumCache.get(normalized);
+      if(cached && now-cached.at<60000) return res.end(JSON.stringify({balance:cached.balance,address,source:'Tatum Sui Mainnet gRPC (cached up to 60 seconds)'}));
+      tatumRequests=tatumRequests.filter(t=>now-t<3600000);
+      if(tatumRequests.length>=60 || tatumRequests.filter(t=>now-t<60000).length>=10){res.writeHead(429);return res.end(JSON.stringify({error:'Demo lookup limit reached. Please try again later.'}));}
+      tatumRequests.push(now);
+      const balance=await getBalance(normalized,process.env.TATUM_API_KEY);
+      if(tatumCache.size>=100)tatumCache.delete(tatumCache.keys().next().value);
+      tatumCache.set(normalized,{balance,at:Date.now()});
+      return res.end(JSON.stringify({balance,address,source:'Tatum Sui Mainnet gRPC'}));
     } catch(e){res.writeHead(502);return res.end(JSON.stringify({error:'Wallet lookup failed. Check your Tatum configuration and try again.'}));}
   }
   const file=req.url==='/'?'index.html':req.url.slice(1).split('?')[0];
